@@ -1,22 +1,42 @@
-import { drizzle } from 'drizzle-orm/postgres-js';
-import postgres from 'postgres';
-import { eq, and } from 'drizzle-orm';
-import * as schema from '../shared/schema.mjs';
+import { drizzle } from "drizzle-orm/postgres-js";
+import postgres from "postgres";
+import { eq } from "drizzle-orm";
+import * as schema from "../shared/schema.js";
 
-// PostgreSQL connection
 const connectionString = process.env.DATABASE_URL;
 
 if (!connectionString) {
-  throw new Error('DATABASE_URL environment variable is not set');
+  throw new Error("DATABASE_URL environment variable is not set");
 }
 
-// Create postgres client
-const client = postgres(connectionString);
+/* ================= SERVERLESS SAFE CACHE ================= */
+let client;
+let db;
 
-// Create drizzle instance
-export const db = drizzle(client, { schema });
+if (!global.pg) {
+  client = postgres(connectionString, {
+    max: 1,                 // 🔥 VERY IMPORTANT FOR VERCEL
+    idle_timeout: 20,
+    connect_timeout: 10,
+  });
 
-// User operations
+  db = drizzle(client, { schema });
+
+  global.pg = { client, db };
+} else {
+  client = global.pg.client;
+  db = global.pg.db;
+}
+
+export { db };
+
+/* ================= CONNECTION TEST ================= */
+export const connectDB = async () => {
+  await client`SELECT 1`;
+  console.log("✅ PostgreSQL connected");
+};
+
+/* ================= USER STORAGE ================= */
 export const userStorage = {
   async create(data) {
     const [user] = await db.insert(schema.users).values(data).returning();
@@ -24,124 +44,155 @@ export const userStorage = {
   },
 
   async findById(id) {
-    const [user] = await db.select().from(schema.users).where(eq(schema.users.id, id));
-    return user || null;
+    const [user] = await db
+      .select()
+      .from(schema.users)
+      .where(eq(schema.users.id, id));
+    return user ?? null;
   },
 
   async findByEmail(email) {
-    const [user] = await db.select().from(schema.users).where(eq(schema.users.email, email));
-    return user || null;
+    const [user] = await db
+      .select()
+      .from(schema.users)
+      .where(eq(schema.users.email, email));
+    return user ?? null;
   },
 
   async updateCart(id, cart) {
-    await db.update(schema.users).set({ cart }).where(eq(schema.users.id, id));
+    await db
+      .update(schema.users)
+      .set({ cart })
+      .where(eq(schema.users.id, id));
   },
 
   async findAll() {
-    return await db.select().from(schema.users);
-  }
+    return db.select().from(schema.users);
+  },
 };
 
-// Product operations
+/* ================= PRODUCT STORAGE ================= */
 export const productStorage = {
   async create(data) {
-    const [product] = await db.insert(schema.products).values(data).returning();
+    const [product] = await db
+      .insert(schema.products)
+      .values(data)
+      .returning();
     return product;
   },
 
   async findById(id) {
-    const [product] = await db.select().from(schema.products).where(eq(schema.products.id, id));
-    return product || null;
+    const [product] = await db
+      .select()
+      .from(schema.products)
+      .where(eq(schema.products.id, id));
+    return product ?? null;
   },
 
   async findAll() {
-    return await db.select().from(schema.products);
+    return db.select().from(schema.products);
   },
 
   async updateStock(id, stock) {
-    await db.update(schema.products).set({ stock }).where(eq(schema.products.id, id));
+    await db
+      .update(schema.products)
+      .set({ stock })
+      .where(eq(schema.products.id, id));
   },
 
   async findByCategory(category) {
-    return await db.select().from(schema.products).where(eq(schema.products.category, category));
-  }
+    return db
+      .select()
+      .from(schema.products)
+      .where(eq(schema.products.category, category));
+  },
 };
 
-// Order operations
+/* ================= ORDER STORAGE ================= */
 export const orderStorage = {
   async create(data) {
-    const [order] = await db.insert(schema.orders).values(data).returning();
+    const [order] = await db
+      .insert(schema.orders)
+      .values(data)
+      .returning();
     return order;
   },
 
   async findById(id) {
-    const [order] = await db.select().from(schema.orders).where(eq(schema.orders.id, id));
-    return order || null;
+    const [order] = await db
+      .select()
+      .from(schema.orders)
+      .where(eq(schema.orders.id, id));
+    return order ?? null;
   },
 
   async findByUserId(userId) {
-    return await db.select().from(schema.orders).where(eq(schema.orders.userId, userId));
+    return db
+      .select()
+      .from(schema.orders)
+      .where(eq(schema.orders.userId, userId));
   },
 
   async findAll() {
-    return await db.select().from(schema.orders);
+    return db.select().from(schema.orders);
   },
 
   async updateStatus(id, status) {
-    await db.update(schema.orders).set({ status }).where(eq(schema.orders.id, id));
+    await db
+      .update(schema.orders)
+      .set({ status })
+      .where(eq(schema.orders.id, id));
   },
 
   async delete(id) {
-    await db.delete(schema.orders).where(eq(schema.orders.id, id));
-  }
+    await db
+      .delete(schema.orders)
+      .where(eq(schema.orders.id, id));
+  },
 };
 
-// Address operations
+/* ================= ADDRESS STORAGE ================= */
 export const addressStorage = {
   async create(data) {
-    const [address] = await db.insert(schema.addresses).values(data).returning();
+    const [address] = await db
+      .insert(schema.addresses)
+      .values(data)
+      .returning();
     return address;
   },
 
-  async findById(id) {
-    const [address] = await db.select().from(schema.addresses).where(eq(schema.addresses.id, id));
-    return address || null;
-  },
-
   async findByUserId(userId) {
-    return await db.select().from(schema.addresses).where(eq(schema.addresses.userId, userId));
+    return db
+      .select()
+      .from(schema.addresses)
+      .where(eq(schema.addresses.userId, userId));
   },
 
   async delete(id) {
-    await db.delete(schema.addresses).where(eq(schema.addresses.id, id));
-  }
+    await db
+      .delete(schema.addresses)
+      .where(eq(schema.addresses.id, id));
+  },
 };
 
-// Producer Application operations
+/* ================= PRODUCER APPLICATION ================= */
 export const producerApplicationStorage = {
   async create(data) {
-    const [application] = await db.insert(schema.producerApplications).values(data).returning();
+    const [application] = await db
+      .insert(schema.producerApplications)
+      .values(data)
+      .returning();
     return application;
   },
 
   async findAll() {
-    return await db.select().from(schema.producerApplications);
+    return db.select().from(schema.producerApplications);
   },
 
   async updateStatus(id, status) {
-    await db.update(schema.producerApplications).set({ status }).where(eq(schema.producerApplications.id, id));
-  }
+    await db
+      .update(schema.producerApplications)
+      .set({ status })
+      .where(eq(schema.producerApplications.id, id));
+  },
 };
-
-// Database connection test
-export const connectDB = async () => {
-  try {
-    await client`SELECT 1`;
-    console.log('PostgreSQL Database Connected');
-  } catch (error) {
-    console.error('Database connection error:', error);
-    throw error;
-  }
-};
-
-export default db;

@@ -5,8 +5,7 @@ import "dotenv/config";
 import path from "path";
 import { fileURLToPath } from "url";
 
-import connectDB from "./configs/db.js";
-import connectCloudinary from "./configs/cloudinary.js";
+import { connectDB } from "./storage/storage.js"; // ✅ FIXED
 
 /* ROUTES */
 import userRouter from "./routes/userRoute.js";
@@ -39,14 +38,11 @@ let isConnected = false;
 async function connectOnce() {
   if (!isConnected) {
     await connectDB();
-    await connectCloudinary();
     isConnected = true;
-    console.log("✅ MongoDB & Cloudinary connected");
   }
 }
 
 /* ================= STRIPE WEBHOOK ================= */
-/* ❗ MUST be before express.json */
 app.post(
   "/stripe",
   express.raw({ type: "application/json" }),
@@ -69,16 +65,14 @@ app.use(
   })
 );
 
-/* ================= API ROUTES ================= */
+/* ================= ROUTES ================= */
 app.use("/api/user", userRouter);
 app.use("/api/seller", sellerRouter);
 app.use("/api/admin", adminRoutes);
 app.use("/api/wallet", walletRoutes);
-
 app.use("/api/producer", producerRouter);
 app.use("/api/producer-auth", producerAuthRouter);
 app.use("/api/producer", producerProductRouter);
-
 app.use("/api/product", productRouter);
 app.use("/api/cart", cartRouter);
 app.use("/api/address", addressRouter);
@@ -88,21 +82,19 @@ app.use("/api/eco-journey", ecoJourneyRouter);
 app.use("/api/blog", blogRouter);
 
 /* ================= HEALTH ================= */
-app.get("/api/health", (req, res) => {
-  res.json({ success: true, message: "API working 🚀" });
-});
+app.get("/api/health", (_, res) =>
+  res.json({ success: true, message: "API working 🚀" })
+);
 
-/* ================= FRONTEND (PRODUCTION) ================= */
+/* ================= FRONTEND ================= */
 const clientPath = path.join(__dirname, "../client/dist");
 
 if (process.env.NODE_ENV === "production") {
   app.use(express.static(clientPath));
-
-  app.get("*", (req, res) => {
-    res.sendFile(path.join(clientPath, "index.html"));
-  });
+  app.get("*", (_, res) =>
+    res.sendFile(path.join(clientPath, "index.html"))
+  );
 }
 
-/* ================= SERVERLESS EXPORT ================= */
-/* ❌ DO NOT USE app.listen() */
+/* ❌ DO NOT app.listen() ON VERCEL */
 export default app;
