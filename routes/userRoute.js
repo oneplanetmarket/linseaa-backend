@@ -1,6 +1,5 @@
 import express from "express";
 import authUser from "../middlewares/authUser.js";
-
 import {
   register,
   login,
@@ -15,19 +14,18 @@ import {
 
 const router = express.Router();
 
-/* ================= AUTH ================= */
+/* AUTH */
 router.post("/register", register);
 router.post("/login", login);
 router.get("/google-callback", googleCallback);
 router.post("/forgot-password", forgotPassword);
 router.post("/reset-password", resetPassword);
 
-/* ================= SESSION ================= */
+/* SESSION */
 router.get("/is-auth", authUser, isAuth);
 router.post("/logout", authUser, logout);
 
-/* ================= LINKEDIN ================= */
-// 🔥 REQUIRED for /dashboard/linkedin
+/* LINKEDIN */
 router.get("/linkedin-status", authUser, getLinkedInStatus);
 router.post("/submit-linkedin", authUser, submitLinkedIn);
 

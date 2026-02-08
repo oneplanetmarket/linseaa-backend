@@ -12,8 +12,6 @@ import {
 
 const productRouter = express.Router();
 
-/* ================= PRODUCT ROUTES ================= */
-
 productRouter.post("/add", upload.array("images"), authSeller, addProduct);
 productRouter.get("/list", productList);
 productRouter.get("/id", productById);
@@ -21,5 +19,4 @@ productRouter.post("/stock", authSeller, changeStock);
 productRouter.post("/update-stock", authSeller, updateStockQuantity);
 productRouter.delete("/delete/:id", authSeller, deleteProduct);
 
-/* 🔥 THIS IS MANDATORY */
 export default productRouter;

@@ -4,6 +4,7 @@ import User from "../models/User.js";
 const authUser = async (req, res, next) => {
   try {
     const token = req.cookies?.token;
+
     if (!token) {
       return res.status(401).json({ success: false, message: "Auth required" });
     }
@@ -17,8 +18,8 @@ const authUser = async (req, res, next) => {
 
     req.user = user;
     next();
-  } catch (err) {
-    return res.status(401).json({ success: false, message: "Invalid token" });
+  } catch {
+    res.status(401).json({ success: false, message: "Invalid token" });
   }
 };
 

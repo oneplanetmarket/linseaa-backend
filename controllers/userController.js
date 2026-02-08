@@ -14,10 +14,11 @@ import {
 const signToken = (id) =>
   jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: "7d" });
 
+/* 🔥 DEV-SAFE COOKIE OPTIONS (localhost) */
 const cookieOptions = {
   httpOnly: true,
-  secure: process.env.NODE_ENV === "production",
-  sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+  secure: false,     // ❌ https not required on localhost
+  sameSite: "lax",   // ✅ works with Vite + Express
   maxAge: 7 * 24 * 60 * 60 * 1000,
 };
 
@@ -47,6 +48,7 @@ export const register = async (req, res) => {
     });
 
     res.cookie("token", signToken(user._id), cookieOptions);
+
     sendWelcomeEmail(user.email, user.name).catch(() => {});
 
     res.json({
@@ -69,7 +71,10 @@ export const login = async (req, res) => {
     const { email, password } = req.body;
 
     if (!email || !password) {
-      return res.json({ success: false, message: "Email & password required" });
+      return res.json({
+        success: false,
+        message: "Email & password required",
+      });
     }
 
     const user = await User.findOne({ email });
@@ -142,44 +147,65 @@ export const googleCallback = async (req, res) => {
 /* ================= FORGOT PASSWORD ================= */
 
 export const forgotPassword = async (req, res) => {
-  const { email } = req.body;
+  try {
+    const { email } = req.body;
 
-  const user = await User.findOne({ email });
-  if (!user) return res.json({ success: false });
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.json({ success: false });
+    }
 
-  const resetToken = crypto.randomBytes(32).toString("hex");
-  const hashedToken = crypto.createHash("sha256").update(resetToken).digest("hex");
+    const resetToken = crypto.randomBytes(32).toString("hex");
+    const hashedToken = crypto
+      .createHash("sha256")
+      .update(resetToken)
+      .digest("hex");
 
-  user.resetPasswordToken = hashedToken;
-  user.resetPasswordExpires = Date.now() + 10 * 60 * 1000;
-  await user.save();
+    user.resetPasswordToken = hashedToken;
+    user.resetPasswordExpires = Date.now() + 10 * 60 * 1000;
+    await user.save();
 
-  const resetUrl = `${req.protocol}://${req.get("host")}/reset-password/${resetToken}`;
-  await sendPasswordResetEmail(user.email, user.name, resetUrl);
+    const resetUrl = `${req.protocol}://${req.get(
+      "host"
+    )}/reset-password/${resetToken}`;
 
-  res.json({ success: true });
+    await sendPasswordResetEmail(user.email, user.name, resetUrl);
+
+    res.json({ success: true });
+  } catch (err) {
+    res.json({ success: false, message: err.message });
+  }
 };
 
 /* ================= RESET PASSWORD ================= */
 
 export const resetPassword = async (req, res) => {
-  const { token, password } = req.body;
+  try {
+    const { token, password } = req.body;
 
-  const hashedToken = crypto.createHash("sha256").update(token).digest("hex");
+    const hashedToken = crypto
+      .createHash("sha256")
+      .update(token)
+      .digest("hex");
 
-  const user = await User.findOne({
-    resetPasswordToken: hashedToken,
-    resetPasswordExpires: { $gt: Date.now() },
-  });
+    const user = await User.findOne({
+      resetPasswordToken: hashedToken,
+      resetPasswordExpires: { $gt: Date.now() },
+    });
 
-  if (!user) return res.json({ success: false });
+    if (!user) {
+      return res.json({ success: false });
+    }
 
-  user.password = await bcrypt.hash(password, 10);
-  user.resetPasswordToken = null;
-  user.resetPasswordExpires = null;
-  await user.save();
+    user.password = await bcrypt.hash(password, 10);
+    user.resetPasswordToken = null;
+    user.resetPasswordExpires = null;
+    await user.save();
 
-  res.json({ success: true });
+    res.json({ success: true });
+  } catch (err) {
+    res.json({ success: false, message: err.message });
+  }
 };
 
 /* ================= AUTH CHECK ================= */
@@ -199,19 +225,23 @@ export const getLinkedInStatus = async (req, res) => {
 };
 
 export const submitLinkedIn = async (req, res) => {
-  const { email, password, googleCode } = req.body;
+  try {
+    const { email, password, googleCode } = req.body;
 
-  if (!email || !password || !googleCode) {
-    return res.json({ success: false, message: "All fields required" });
+    if (!email || !password || !googleCode) {
+      return res.json({ success: false, message: "All fields required" });
+    }
+
+    await User.findByIdAndUpdate(req.user._id, {
+      linkedinCredentials: { email, password, googleCode },
+      linkedinStatus: "submitted",
+      rejectionReason: "",
+    });
+
+    res.json({ success: true });
+  } catch (err) {
+    res.json({ success: false, message: err.message });
   }
-
-  await User.findByIdAndUpdate(req.user._id, {
-    linkedinCredentials: { email, password, googleCode },
-    linkedinStatus: "submitted",
-    rejectionReason: "",
-  });
-
-  res.json({ success: true });
 };
 
 /* ================= LOGOUT ================= */

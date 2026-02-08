@@ -12,8 +12,8 @@ import userRouter from "./routes/userRoute.js";
 import sellerRouter from "./routes/sellerRoute.js";
 import adminRoutes from "./routes/admin.js";
 import walletRoutes from "./routes/walletRoutes.js";
-import productRouter from "./routes/productRoute.js";   // ✅ ADDED
-import cartRouter from "./routes/cartRoute.js";         // ✅ ADDED
+import productRouter from "./routes/productRoute.js";
+import cartRouter from "./routes/cartRoute.js";
 
 import { stripeWebhooks } from "./controllers/orderController.js";
 
@@ -40,18 +40,16 @@ app.use(cookieParser());
 
 app.use(
   cors({
-    origin: true,
+    origin: "http://localhost:5173",
     credentials: true,
   })
 );
 
-/* ================= ROUTES ================= */
+/* ================= API ROUTES ================= */
 app.use("/api/user", userRouter);
 app.use("/api/seller", sellerRouter);
 app.use("/api/admin", adminRoutes);
 app.use("/api/wallet", walletRoutes);
-
-// 🔥 THESE TWO FIX YOUR ERRORS
 app.use("/api/product", productRouter);
 app.use("/api/cart", cartRouter);
 
@@ -60,9 +58,8 @@ app.get("/api/health", (_, res) => {
   res.json({ success: true, message: "API working 🚀" });
 });
 
-/* ================= FRONTEND ================= */
+/* ================= PROD FRONTEND ================= */
 const clientPath = path.join(__dirname, "../client/dist");
-
 if (process.env.NODE_ENV === "production") {
   app.use(express.static(clientPath));
   app.get("*", (_, res) =>
@@ -70,12 +67,10 @@ if (process.env.NODE_ENV === "production") {
   );
 }
 
-/* ================= START SERVER ================= */
-const PORT = process.env.PORT || 5000;
-
+/* ================= START ================= */
+const PORT = process.env.PORT || 5001;
 app.listen(PORT, () => {
   console.log(`🚀 Server running at http://localhost:${PORT}`);
 });
 
-/* Export for Vercel */
 export default app;
