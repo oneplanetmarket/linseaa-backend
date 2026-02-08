@@ -5,13 +5,15 @@ import "dotenv/config";
 import path from "path";
 import { fileURLToPath } from "url";
 
-import { connectDB } from "./storage.js";
+import connectDB from "./configs/db.js";
 
-/* ROUTES */
+/* ================= ROUTES ================= */
 import userRouter from "./routes/userRoute.js";
 import sellerRouter from "./routes/sellerRoute.js";
 import adminRoutes from "./routes/admin.js";
 import walletRoutes from "./routes/walletRoutes.js";
+import productRouter from "./routes/productRoute.js";   // ✅ ADDED
+import cartRouter from "./routes/cartRoute.js";         // ✅ ADDED
 
 import { stripeWebhooks } from "./controllers/orderController.js";
 
@@ -22,15 +24,8 @@ const __dirname = path.dirname(__filename);
 /* ================= APP ================= */
 const app = express();
 
-/* ================= DB (SERVERLESS SAFE) ================= */
-let isConnected = false;
-
-async function connectOnce() {
-  if (!isConnected) {
-    await connectDB();
-    isConnected = true;
-  }
-}
+/* ================= DB ================= */
+connectDB();
 
 /* ================= STRIPE WEBHOOK ================= */
 app.post(
@@ -40,11 +35,6 @@ app.post(
 );
 
 /* ================= MIDDLEWARE ================= */
-app.use(async (req, res, next) => {
-  await connectOnce();
-  next();
-});
-
 app.use(express.json());
 app.use(cookieParser());
 
@@ -61,10 +51,14 @@ app.use("/api/seller", sellerRouter);
 app.use("/api/admin", adminRoutes);
 app.use("/api/wallet", walletRoutes);
 
+// 🔥 THESE TWO FIX YOUR ERRORS
+app.use("/api/product", productRouter);
+app.use("/api/cart", cartRouter);
+
 /* ================= HEALTH ================= */
-app.get("/api/health", (_, res) =>
-  res.json({ success: true, message: "API working 🚀" })
-);
+app.get("/api/health", (_, res) => {
+  res.json({ success: true, message: "API working 🚀" });
+});
 
 /* ================= FRONTEND ================= */
 const clientPath = path.join(__dirname, "../client/dist");
@@ -76,5 +70,12 @@ if (process.env.NODE_ENV === "production") {
   );
 }
 
-/* ❌ DO NOT app.listen() ON VERCEL */
+/* ================= START SERVER ================= */
+const PORT = process.env.PORT || 5000;
+
+app.listen(PORT, () => {
+  console.log(`🚀 Server running at http://localhost:${PORT}`);
+});
+
+/* Export for Vercel */
 export default app;

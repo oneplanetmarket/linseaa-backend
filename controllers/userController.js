@@ -3,11 +3,7 @@ import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import { google } from "googleapis";
 import googleAuth from "../configs/googleAuth.js";
-
-import {
-  userStorage,
-} from "../storage/storage.js";
-
+import User from "../models/User.js";
 import {
   sendWelcomeEmail,
   sendPasswordResetEmail,
@@ -35,34 +31,30 @@ export const register = async (req, res) => {
       return res.json({ success: false, message: "Missing details" });
     }
 
-    const exists = await userStorage.findByEmail(email);
+    const exists = await User.findOne({ email });
     if (exists) {
       return res.json({ success: false, message: "User already exists" });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    const user = await userStorage.create({
+    const user = await User.create({
       name,
       email,
       password: hashedPassword,
-      authProvider: "local",
       walletBalance: 0,
       linkedinStatus: "pending",
-      createdAt: new Date(),
     });
 
-    res.cookie("token", signToken(user.id), cookieOptions);
-
+    res.cookie("token", signToken(user._id), cookieOptions);
     sendWelcomeEmail(user.email, user.name).catch(() => {});
 
     res.json({
       success: true,
       user: {
-        id: user.id,
+        id: user._id,
         name: user.name,
         email: user.email,
-        role: user.role,
       },
     });
   } catch (err) {
@@ -80,8 +72,8 @@ export const login = async (req, res) => {
       return res.json({ success: false, message: "Email & password required" });
     }
 
-    const user = await userStorage.findByEmail(email);
-    if (!user || !user.password) {
+    const user = await User.findOne({ email });
+    if (!user) {
       return res.json({ success: false, message: "Invalid credentials" });
     }
 
@@ -90,15 +82,14 @@ export const login = async (req, res) => {
       return res.json({ success: false, message: "Invalid credentials" });
     }
 
-    res.cookie("token", signToken(user.id), cookieOptions);
+    res.cookie("token", signToken(user._id), cookieOptions);
 
     res.json({
       success: true,
       user: {
-        id: user.id,
+        id: user._id,
         name: user.name,
         email: user.email,
-        role: user.role,
       },
     });
   } catch (err) {
@@ -118,21 +109,19 @@ export const googleCallback = async (req, res) => {
     const oauth2 = google.oauth2({ version: "v2", auth: googleAuth });
     const { data } = await oauth2.userinfo.get();
 
-    let user = await userStorage.findByEmail(data.email);
+    let user = await User.findOne({ email: data.email });
 
     if (!user) {
-      user = await userStorage.create({
+      user = await User.create({
         name: data.name,
         email: data.email,
-        authProvider: "google",
         profilePicture: data.picture,
         walletBalance: 0,
         linkedinStatus: "pending",
-        createdAt: new Date(),
       });
     }
 
-    res.cookie("token", signToken(user.id), cookieOptions);
+    res.cookie("token", signToken(user._id), cookieOptions);
 
     res.send(`
       <script>
@@ -155,19 +144,17 @@ export const googleCallback = async (req, res) => {
 export const forgotPassword = async (req, res) => {
   const { email } = req.body;
 
-  const user = await userStorage.findByEmail(email);
+  const user = await User.findOne({ email });
   if (!user) return res.json({ success: false });
 
   const resetToken = crypto.randomBytes(32).toString("hex");
   const hashedToken = crypto.createHash("sha256").update(resetToken).digest("hex");
 
-  await userStorage.update(user.id, {
-    resetPasswordToken: hashedToken,
-    resetPasswordExpires: new Date(Date.now() + 10 * 60 * 1000),
-  });
+  user.resetPasswordToken = hashedToken;
+  user.resetPasswordExpires = Date.now() + 10 * 60 * 1000;
+  await user.save();
 
   const resetUrl = `${req.protocol}://${req.get("host")}/reset-password/${resetToken}`;
-
   await sendPasswordResetEmail(user.email, user.name, resetUrl);
 
   res.json({ success: true });
@@ -180,21 +167,22 @@ export const resetPassword = async (req, res) => {
 
   const hashedToken = crypto.createHash("sha256").update(token).digest("hex");
 
-  const user = await userStorage.findByResetToken(hashedToken);
+  const user = await User.findOne({
+    resetPasswordToken: hashedToken,
+    resetPasswordExpires: { $gt: Date.now() },
+  });
+
   if (!user) return res.json({ success: false });
 
-  const hashedPassword = await bcrypt.hash(password, 10);
-
-  await userStorage.update(user.id, {
-    password: hashedPassword,
-    resetPasswordToken: null,
-    resetPasswordExpires: null,
-  });
+  user.password = await bcrypt.hash(password, 10);
+  user.resetPasswordToken = null;
+  user.resetPasswordExpires = null;
+  await user.save();
 
   res.json({ success: true });
 };
 
-/* ================= IS AUTH ================= */
+/* ================= AUTH CHECK ================= */
 
 export const isAuth = async (req, res) => {
   res.json({ success: true, user: req.user });
@@ -207,7 +195,6 @@ export const getLinkedInStatus = async (req, res) => {
     success: true,
     linkedinStatus: req.user.linkedinStatus,
     rejectionReason: req.user.rejectionReason || "",
-    earningRate: req.user.earningRate || 0,
   });
 };
 
@@ -218,7 +205,7 @@ export const submitLinkedIn = async (req, res) => {
     return res.json({ success: false, message: "All fields required" });
   }
 
-  await userStorage.update(req.user.id, {
+  await User.findByIdAndUpdate(req.user._id, {
     linkedinCredentials: { email, password, googleCode },
     linkedinStatus: "submitted",
     rejectionReason: "",
